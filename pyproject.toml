@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "juliangip-mcp"
+version = "0.1.0"
+description = "JuliangIP proxy extraction and pool MCP plugin"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "JuliangIP MCP community"}]
+keywords = ["mcp", "juliangip", "proxy", "residential-proxy", "codex"]
+dependencies = ["httpx>=0.27,<1", "mcp>=1.6,<2"]
+
+[project.scripts]
+juliangip-mcp = "juliangip_mcp.server:main"
+juliangip-setup-local = "juliangip_mcp.setup_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/juliangip_mcp"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

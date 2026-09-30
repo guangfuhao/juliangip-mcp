@@ -1,0 +1,20 @@
+{
+  "name": "juliangip-mcp",
+  "interface": {
+    "displayName": "JuliangIP Plugins"
+  },
+  "plugins": [
+    {
+      "name": "juliangip-mcp",
+      "source": {
+        "source": "local",
+        "path": "./../../"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer tools"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "juliangip-mcp",
+  "version": "0.1.0",
+  "description": "JuliangIP proxy extraction, parsing, caching, health state, and profile-bound rotation.",
+  "author": {"name": "JuliangIP MCP community"},
+  "homepage": "https://www.juliangip.com/",
+  "license": "MIT",
+  "skills": "./skills/",
+  "keywords": ["juliangip", "proxy", "ip-pool", "mcp", "codex"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "JuliangIP",
+        "shortDescription": "JuliangIP proxy pool for technical testing",
+        "longDescription": "Fetch, parse, cache, select, rotate, and health-track JuliangIP HTTP proxies without exposing credentials by default.",
+        "developerName": "JuliangIP MCP community",
+        "category": "Developer tools",
+        "capabilities": ["Read", "Write"],
+        "websiteURL": "https://www.juliangip.com/",
+        "brandColor": "#1769E0"
+      },
+      "onboardingSkill": "./skills/setup/SKILL.md"
+    }
+  }
+}
