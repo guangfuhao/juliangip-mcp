@@ -75,7 +75,8 @@ def juliangip_settings_update(set: dict[str, Any]) -> SettingsUpdateResult:
     if unknown:
         raise ValueError(f"Unsupported JuliangIP settings: {', '.join(sorted(unknown))}")
     current = load_credentials()
-    sign = set.get("sign") or current["sign"]
+    provided_sign = set.get("sign")
+    sign = current["sign"] if not provided_sign or provided_sign == MASKED else str(provided_sign)
     trade_no = set.get("trade_no") or current["trade_no"]
     save_credentials(trade_no=trade_no, sign=sign, api_url=str(set.get("api_url") or current["api_url"] or DEFAULT_API_URL), refresh_sec=float(set.get("refresh_sec") or current["refresh_sec"]), max_uses=int(set.get("max_uses") or current["max_uses"]))
     snapshot = settings_snapshot()

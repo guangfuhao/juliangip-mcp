@@ -64,7 +64,12 @@ class ProxyPool:
         if not rotate and bound_id in by_id and int(binding.get("uses", 0)) < int(self.credentials.get("max_uses", 3)):
             chosen = by_id[bound_id]
         else:
-            available = [record for record in records if float(state.get(record.proxy_id, {}).get("cooldown_until", 0)) <= now and record.remaining_seconds is None or float(state.get(record.proxy_id, {}).get("cooldown_until", 0)) <= now and (record.remaining_seconds or 0) > 0]
+            available = []
+            for record in records:
+                cooling_until = float(state.get(record.proxy_id, {}).get("cooldown_until", 0))
+                remaining = record.remaining_seconds
+                if cooling_until <= now and (remaining is None or remaining > 0):
+                    available.append(record)
             if not available:
                 if self.credentials.get("strict", True):
                     raise JuliangIPError("All proxy records are cooling down or expired; strict mode refuses an unsafe fallback")
