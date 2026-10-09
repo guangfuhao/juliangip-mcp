@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .config import load_credentials, profile_dir
+from .config import load_credentials, profile_dir, write_private_json
 from .source import JuliangIPError, JuliangIPSource, ProxyRecord
 
 
@@ -25,12 +25,7 @@ class ProxyPool:
             return {}
 
     def _save_state(self, state: dict[str, dict[str, float | int]]) -> None:
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        temp = self.state_path.with_suffix(".tmp")
-        temp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
-        temp.chmod(0o600)
-        temp.replace(self.state_path)
-        self.state_path.chmod(0o600)
+        write_private_json(self.state_path, state)
 
     def _binding(self) -> dict[str, Any]:
         try:
@@ -40,23 +35,21 @@ class ProxyPool:
             return {}
 
     def _save_binding(self, binding: dict[str, Any]) -> None:
-        self.binding_path.parent.mkdir(parents=True, exist_ok=True)
-        temp = self.binding_path.with_suffix(".tmp")
-        temp.write_text(json.dumps(binding, ensure_ascii=False), encoding="utf-8")
-        temp.chmod(0o600)
-        temp.replace(self.binding_path)
-        self.binding_path.chmod(0o600)
+        write_private_json(self.binding_path, binding)
 
     def records(self, *, force: bool = False, num: int = 3) -> list[ProxyRecord]:
         return self.source.fetch(num=num, force=force)
 
-    def pick(self, *, preferred_id: str | None = None, rotate: bool = False, num: int = 3) -> ProxyRecord:
-        records = self.records(num=num)
+    def pick(self, *, preferred_id: str | None = None, rotate: bool = False, num: int = 3, force: bool = False) -> ProxyRecord:
+        records = self.records(num=num, force=force)
         if not records:
             raise JuliangIPError("No proxy records available")
         state = self._state()
         now = time.time()
-        by_id = {record.proxy_id: record for record in records}
+        available = [record for record in records if
+                     float(state.get(record.proxy_id, {}).get("cooldown_until", 0)) <= now
+                     and (record.remaining_at(now) is None or record.remaining_at(now) > 0)]
+        by_id = {record.proxy_id: record for record in available}
         binding = self._binding()
         bound_id = binding.get("proxy_id")
         if not rotate and preferred_id in by_id:
@@ -64,16 +57,13 @@ class ProxyPool:
         if not rotate and bound_id in by_id and int(binding.get("uses", 0)) < int(self.credentials.get("max_uses", 3)):
             chosen = by_id[bound_id]
         else:
-            available = []
-            for record in records:
-                cooling_until = float(state.get(record.proxy_id, {}).get("cooldown_until", 0))
-                remaining = record.remaining_seconds
-                if cooling_until <= now and (remaining is None or remaining > 0):
-                    available.append(record)
+            if bound_id and (rotate or int(binding.get("uses", 0)) >= int(self.credentials.get("max_uses", 3))):
+                # Do not randomly reselect the same exhausted/bound exit.
+                available = [record for record in available if record.proxy_id != bound_id]
             if not available:
                 if self.credentials.get("strict", True):
                     raise JuliangIPError("All proxy records are cooling down or expired; strict mode refuses an unsafe fallback")
-                available = records
+                raise JuliangIPError("No healthy proxy available; refresh the pool explicitly")
             chosen = random.choice(available)
         uses = int(binding.get("uses", 0)) + 1 if binding.get("proxy_id") == chosen.proxy_id and not rotate else 1
         self._save_binding({"proxy_id": chosen.proxy_id, "uses": uses, "bound_at": time.time()})
@@ -101,4 +91,6 @@ class ProxyPool:
         now = time.time()
         state = self._state()
         cooling = sum(1 for record in records if float(state.get(record.proxy_id, {}).get("cooldown_until", 0)) > now)
-        return {"cached_records": len(records), "healthy_records": max(0, len(records) - cooling), "cooling_records": cooling, "cache_age_seconds": round(now - fetched_at, 2) if fetched_at else None, "strict": bool(self.credentials.get("strict", True)), "max_uses": int(self.credentials.get("max_uses", 3))}
+        expired = sum(1 for record in records if record.remaining_at(now) == 0)
+        healthy = sum(1 for record in records if record.remaining_at(now) != 0 and float(state.get(record.proxy_id, {}).get("cooldown_until", 0)) <= now)
+        return {"cached_records": len(records), "healthy_records": healthy, "expired_records": expired, "cooling_records": cooling, "cache_age_seconds": round(now - fetched_at, 2) if fetched_at else None, "strict": bool(self.credentials.get("strict", True)), "max_uses": int(self.credentials.get("max_uses", 3))}

@@ -1,39 +1,77 @@
-# juliangip-mcp
+# JuliangIP MCP · Codex Plugin
 
-`juliangip-mcp` is a proxy-pool plugin for authorized technical testing with JuliangIP. It fetches extraction results, parses provider formats, caches records, tracks health, rotates exits, and redacts credentials by default. It contains no hard-coded order number or signature.
+English | [简体中文](README.md)
 
-## One-sentence install
+An independent Codex plugin and stdio MCP server for authorized technical testing with JuliangIP proxies. It provides extraction, response parsing, local caching, health tracking and exit rotation, with setup/usage skills and a one-shot local configuration page. Signatures and proxy passwords are hidden by default. This community project is not affiliated with JuliangIP.
 
-> Install and run `juliangip-mcp`; on first use open its local setup page to enter the JuliangIP `trade_no` and `sign`, then inspect the proxy pool status.
+## Install with one sentence to your Agent
 
-## Official links
+Send this to Codex:
 
-- [JuliangIP official website](https://www.juliangip.com/)
-- [JuliangIP API documentation](https://www.juliangip.com/)
-- Default extraction API: `http://v2.api.juliangip.com/company/postpay/getips`
+> Install the JuliangIP plugin from https://github.com/guangfuhao/juliangip-mcp using its Codex marketplace, then run juliangip-setup to open the local configuration page. After saving, check local settings and pool status.
 
-## First-run configuration
+Requires Codex with plugin commands, Python 3.10+, and [uv](https://docs.astral.sh/uv/). Alternatively, run:
 
-The extraction endpoint uses the order number `trade_no` and signature `sign`. When the current Codex local-plugin page only shows skills, `juliangip-setup` calls `juliangip_setup_local`, which starts a temporary form bound to `127.0.0.1`. After saving, the service exits and stores the signature in the current user's local configuration with `0600` permissions.
+```sh
+codex plugin marketplace add guangfuhao/juliangip-mcp
+codex plugin add juliangip-mcp@juliangip-mcp
+```
 
-The plugin fixes `auth_type=2` (account/password proxy authorization) and `pt=1` (HTTP/HTTPS proxies) as required by the documented response format. `refresh_sec` defaults to 150 seconds and `max_uses` defaults to 3 to avoid using expired or overused exits.
+Start a new conversation after installation and ask the Agent to open JuliangIP setup. The repository includes `plugin.json`, `mcp.json`, setup/usage skills, and `.agents/plugins/marketplace.json`. The Agent performs installation; installing does not automatically buy or extract proxies.
 
-Headless environments can use `JULIANGIP_TRADE_NO`, `JULIANGIP_SIGN`, and optionally `JULIANGIP_API_URL`. The signature is never written to source, README files, GitHub, logs, ordinary chat messages, or default tool output.
+## Official website and first-run setup
 
-## Capabilities
+- [JuliangIP official website](https://www.juliangip.com/): sign in to your own account and obtain `trade_no` and `sign` from your order's extraction configuration.
+- Default extraction endpoint: `http://v2.api.juliangip.com/company/postpay/getips`.
 
-- `juliangip_settings_read` / `juliangip_settings_update`: read or save settings with the signature masked;
-- `juliangip_setup_local`: open the one-shot local setup page;
-- `juliangip_fetch_proxies`: fetch and cache proxies, returning redacted metadata by default;
-- `juliangip_get_proxy`: select a proxy using health and profile binding;
-- `juliangip_mark_proxy`: record success, failure, or hard-failure cooldown;
-- `juliangip_pool_status`: inspect cached, healthy, and cooling counts;
-- `juliangip_redact_proxy`: remove username and password from a proxy URL.
+Call `juliangip_setup_local` on first use. It starts a separate temporary service bound only to `127.0.0.1` and returns a one-time browser link. Enter your order number (`trade_no`) and signature (`sign`); the service exits after saving, or after 10 minutes without completion. If the browser does not open automatically, ask the Agent to open the returned link.
 
-Proxy username, password, and full URL are returned only when both `reveal_credentials=true` and `confirm_reveal=true` are supplied. Cache and state files use owner-only `0600` permissions.
+Configuration is stored at `~/.config/juliangip-mcp/credentials.json` with owner-only `0600` permissions. Native settings-page availability depends on the Codex version; the local setup page works independently. Headless clients can supply `JULIANGIP_TRADE_NO`, `JULIANGIP_SIGN`, and optionally `JULIANGIP_API_URL` through a protected runtime environment. Do not put real values in prompts, commits, or installation commands.
 
-## Safety boundaries
+The default extraction URL uses HTTP and transmits the order number and signature as GET parameters; use a trusted network. Change `api_url` only after confirming that your plan supports the alternative endpoint. Saving settings is local and does not authenticate upstream; the first actual extraction validates the order and signature.
 
-The signature is a quota credential and must never enter a repository or log. Fetching prefers the cache to avoid repeated billable extraction calls; use `force=true` only when the cache is empty, expired, or exhausted. Strict mode fails when no healthy proxy is available instead of silently falling back to a direct connection.
+## Example requests
 
-Chinese documentation: [README.md](README.md)
+- “Show JuliangIP local settings and pool status.” Reads local configuration and cache without extraction requests.
+- “Fetch 3 JuliangIP proxies with redacted output.” Reuses valid cache where possible; a new extraction may consume plan quota.
+- “Select a healthy proxy for this authorized test.” Reuses the current binding, then switches exits when the selection limit is reached.
+- “Mark that proxy as a hard failure and select another healthy exit.” Cooling proxies are excluded from selection.
+
+| Tool | Purpose |
+| --- | --- |
+| `juliangip_settings_read` / `juliangip_settings_update` | Read/save configuration with a masked signature |
+| `juliangip_setup_local` | Launch the one-shot local setup page |
+| `juliangip_fetch_proxies` | Extract/cache proxies; `force=true` requests a refresh |
+| `juliangip_get_proxy` | Select a healthy exit, with `rotate` and `force_refresh` options |
+| `juliangip_mark_proxy` | Record success, failure or hard-failure cooldown |
+| `juliangip_pool_status` | Inspect cached, healthy, expired and cooling counts |
+| `juliangip_redact_proxy` | Strip username/password from a proxy URL |
+
+The plugin fixes `auth_type=2` and `pt=1`, and correctly parses formats such as `ip:port,remaining_seconds:user:pass`. Defaults: refresh interval 150 seconds, at most 3 selections per binding, failure threshold 2, cooldown 600 seconds. Remaining lifetime decreases with elapsed time. Expired or cooling records cannot be selected; an empty eligible pool returns an error until explicitly refreshed or cooled down.
+
+Full proxy username, password and URL are returned only when both `reveal_credentials=true` and `confirm_reveal=true` are supplied. Default output contains redacted metadata. Pass credentials directly to your test program without displaying them in chat or logs. Cache files contain proxy authentication data and also use `0600` permissions.
+
+The current implementation maintains one pool binding per local profile directory. It does not manage browsers, cookies, multiple browser identities, or system network settings. State files have no cross-process locking; do not share a directory between concurrent processes. Separate clients can use distinct `JULIANGIP_CONFIG_FILE` and `JULIANGIP_PROFILE_DIR` paths.
+
+## Other MCP clients
+
+```sh
+git clone https://github.com/guangfuhao/juliangip-mcp.git
+cd juliangip-mcp
+uv sync
+uv run juliangip-mcp
+```
+
+This runs a stdio MCP server. Configure an MCP client to launch `uv` with arguments `run --directory /absolute/path/to/juliangip-mcp juliangip-mcp`. To open the configuration page independently, run `uv run juliangip-setup-local`.
+
+## Development and validation
+
+```sh
+uv sync --extra dev
+uv run pytest -q
+uv build
+```
+
+Tests use dummy credentials and mocked provider responses, never a real subscription. GitHub Actions tests and builds on Python 3.10/3.12. Releases include source archives and Python wheels; Codex users should use the repository marketplace for the complete plugin.
+
+[MIT License](LICENSE). Report problems through [Issues](https://github.com/guangfuhao/juliangip-mcp/issues), with signatures, order numbers and proxy passwords removed.

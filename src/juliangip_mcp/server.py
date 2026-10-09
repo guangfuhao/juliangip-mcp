@@ -102,11 +102,11 @@ def juliangip_fetch_proxies(num: int = 3, force: bool = False, reveal_credential
         return _error(exc)
 
 
-@mcp.tool(name="juliangip_get_proxy", title="Get a JuliangIP proxy", description="Select a healthy cached proxy while preserving the profile-to-exit binding. Credentials are omitted by default.")
+@mcp.tool(name="juliangip_get_proxy", title="Get a JuliangIP proxy", description="Select a healthy proxy using a single local pool binding. Credentials are omitted by default.")
 def juliangip_get_proxy(force_refresh: bool = False, rotate: bool = False, preferred_proxy_id: str | None = None, reveal_credentials: bool = False, confirm_reveal: bool = False) -> str:
     try:
         _require_reveal(reveal_credentials, confirm_reveal)
-        record = ProxyPool().pick(preferred_id=preferred_proxy_id, rotate=rotate, num=3)
+        record = ProxyPool().pick(preferred_id=preferred_proxy_id, rotate=rotate, num=3, force=force_refresh)
         return _json({"ok": True, "proxy": record.public(reveal_credentials=reveal_credentials)})
     except Exception as exc:
         return _error(exc)

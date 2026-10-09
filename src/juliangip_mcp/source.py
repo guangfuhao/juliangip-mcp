@@ -10,7 +10,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
 
-from .config import DEFAULT_API_URL, load_credentials, profile_dir
+from .config import DEFAULT_API_URL, load_credentials, profile_dir, write_private_json
 
 _IP = r"\d{1,3}(?:\.\d{1,3}){3}"
 _PORT = r"\d{1,5}"
@@ -54,8 +54,14 @@ class ProxyRecord:
             return self.server
         return urlunsplit(("http", f"{quote(self.username, safe='')}:{quote(self.password or '', safe='')}@{self.host}:{self.port}", "", "", ""))
 
+    def remaining_at(self, now: float | None = None) -> int | None:
+        if self.remaining_seconds is None:
+            return None
+        elapsed = max(0, (time.time() if now is None else now) - self.fetched_at)
+        return max(0, int(self.remaining_seconds - elapsed))
+
     def public(self, *, reveal_credentials: bool = False) -> dict[str, Any]:
-        result = {"proxy_id": self.proxy_id, "server": self.server, "remaining_seconds": self.remaining_seconds, "fetched_at": self.fetched_at}
+        result = {"proxy_id": self.proxy_id, "server": self.server, "remaining_seconds": self.remaining_at(), "fetched_at": self.fetched_at}
         if reveal_credentials:
             result.update({"username": self.username, "password": self.password, "proxy_url": self.proxy_url})
         else:
@@ -115,19 +121,18 @@ class JuliangIPSource:
             return [], 0.0
 
     def _save_cache(self, records: list[ProxyRecord]) -> None:
-        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"records": [asdict(record) for record in records], "fetched_at": time.time()}
-        tmp = self.cache_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        tmp.chmod(0o600)
-        tmp.replace(self.cache_path)
-        self.cache_path.chmod(0o600)
+        write_private_json(self.cache_path, payload)
 
     def fetch(self, *, num: int = 3, force: bool = False) -> list[ProxyRecord]:
         if num < 1 or num > 100:
             raise JuliangIPError("num must be between 1 and 100")
         cached, fetched_at = self._load_cache()
         refresh_sec = float(self.credentials.get("refresh_sec", 150))
+        # Unknown lifetimes are usable only within the configured cache window.
+        cached = [record for record in cached if
+                  (record.remaining_at() or 0) > 0 or
+                  (record.remaining_seconds is None and time.time() - fetched_at < refresh_sec)]
         if not force and cached and time.time() - fetched_at < refresh_sec:
             return cached
         if not self.credentials.get("trade_no") or not self.credentials.get("sign"):

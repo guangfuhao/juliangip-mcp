@@ -106,9 +106,8 @@ def _serve(timeout: int, open_browser: bool) -> int:
     server = _SetupServer(("127.0.0.1", 0), setup_token)
     url = f"http://127.0.0.1:{server.server_port}/?setup={urllib.parse.quote(setup_token)}"
     rendezvous = f"/tmp/juliangip-setup-{os.getpid()}.url"
-    with open(rendezvous, "w", encoding="utf-8") as handle:
+    with os.fdopen(os.open(rendezvous, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w", encoding="utf-8") as handle:
         handle.write(url + "\n")
-    os.chmod(rendezvous, 0o600)
     if open_browser:
         try:
             webbrowser.open(url, new=2)

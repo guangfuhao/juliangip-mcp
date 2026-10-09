@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import httpx
+import pytest
+import time
 
-from juliangip_mcp.source import JuliangIPSource, parse_proxy_line
+from juliangip_mcp.source import JuliangIPError, JuliangIPSource, parse_proxy_line
 
 
 def test_parse_juliangip_line_does_not_treat_remaining_seconds_as_username():
@@ -43,3 +45,19 @@ def test_fetch_caches_provider_response(monkeypatch, tmp_path):
     assert len(first) == len(second) == 1
     assert len(calls) == 1
     assert "secret" not in str(first[0].public())
+
+
+def test_expired_cache_is_not_used_when_provider_fails(monkeypatch, tmp_path):
+    monkeypatch.setenv("JULIANGIP_CONFIG_FILE", str(tmp_path / "credentials.json"))
+    monkeypatch.setenv("JULIANGIP_PROFILE_DIR", str(tmp_path))
+    from juliangip_mcp.config import save_credentials
+    save_credentials(trade_no="trade", sign="secret")
+    source = JuliangIPSource()
+    record = parse_proxy_line("1.2.3.4:8080,10:user:pass", fetched_at=time.time() - 20)
+    source._save_cache([record])
+    def fail(*args, **kwargs):
+        raise httpx.ConnectError("offline")
+    monkeypatch.setattr(httpx, "get", fail)
+    with pytest.raises(JuliangIPError, match="ConnectError"):
+        source.fetch()
+    assert record.public()["remaining_seconds"] == 0

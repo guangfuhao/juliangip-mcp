@@ -2,12 +2,27 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
 MASKED = "••••••••"
 DEFAULT_API_URL = "http://v2.api.juliangip.com/company/postpay/getips"
 DEFAULT_PROFILE_DIR = Path.home() / ".config" / "juliangip-mcp"
+
+
+def write_private_json(path: Path, payload: Any) -> None:
+    """Create an owner-only temporary file before writing sensitive contents."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def config_path() -> Path:
@@ -46,9 +61,7 @@ def save_credentials(*, trade_no: str, sign: str, api_url: str = DEFAULT_API_URL
     if auth_type != 2 or pt != 1:
         raise ValueError("JuliangIP plugin requires auth_type=2 and pt=1")
     path = config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"trade_no": trade_no, "sign": sign, "api_url": api_url.strip() or DEFAULT_API_URL, "auth_type": 2, "pt": 1, "refresh_sec": max(1, float(refresh_sec)), "max_uses": max(1, int(max_uses)), "fail_threshold": max(1, int(fail_threshold)), "cooldown_sec": max(1, float(cooldown_sec)), "strict": bool(strict)}, indent=2) + "\n", encoding="utf-8")
-    path.chmod(0o600)
+    write_private_json(path, {"trade_no": trade_no, "sign": sign, "api_url": api_url.strip() or DEFAULT_API_URL, "auth_type": 2, "pt": 1, "refresh_sec": max(1, float(refresh_sec)), "max_uses": max(1, int(max_uses)), "fail_threshold": max(1, int(fail_threshold)), "cooldown_sec": max(1, float(cooldown_sec)), "strict": bool(strict)})
 
 
 def settings_snapshot() -> dict[str, Any]:
